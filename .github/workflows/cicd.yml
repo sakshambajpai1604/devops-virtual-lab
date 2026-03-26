@@ -10,12 +10,33 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build Docker Image
         run: docker build -t devops-lab-app ./app
 
+      - name: Skip deploy when kubeconfig secret is missing
+        if: ${{ secrets.KUBECONFIG_DATA == '' }}
+        run: echo "KUBECONFIG_DATA is not set. Build completed, Kubernetes deploy skipped."
+
+      - name: Setup kubectl
+        if: ${{ secrets.KUBECONFIG_DATA != '' }}
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.30.0"
+
+      - name: Configure kubeconfig
+        if: ${{ secrets.KUBECONFIG_DATA != '' }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > "$HOME/.kube/config"
+
+      - name: Verify cluster connectivity
+        if: ${{ secrets.KUBECONFIG_DATA != '' }}
+        run: kubectl cluster-info
+
       - name: Deploy to Kubernetes
+        if: ${{ secrets.KUBECONFIG_DATA != '' }}
         run: |
           kubectl apply -f k8s/deployment.yml
           kubectl apply -f k8s/service.yml
